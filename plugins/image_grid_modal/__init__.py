@@ -183,26 +183,37 @@ class ImageGridPanel(foo.Panel):
 
         cols = _n_cols(n)
         rows = math.ceil(n / cols)
-        height_map = {1: "400px", 2: "280px", 3: "220px", 4: "180px", 6: "140px"}
-        height = height_map.get(cols, "160px")
+        # Reduced heights prevent row content from overflowing into adjacent rows.
+        height_map = {1: "300px", 2: "180px", 3: "150px", 4: "120px", 6: "90px"}
+        height = height_map.get(cols, "100px")
 
-        # Keys include display_count so React fully remounts the grid on count change.
+        # 1×1 transparent GIF — gives empty last-row cells the same dimensions
+        # as filled cells so flex distributes all columns equally.
+        _BLANK = (
+            "data:image/gif;base64,"
+            "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        )
+
         for row_idx in range(rows):
             row = panel.h_stack(f"row_{display_count}_{row_idx}", gap=1)
             for col_idx in range(cols):
                 idx = row_idx * cols + col_idx
-                if idx >= n:
-                    break
-                name, url, mt = displayed[idx]
                 cell = row.v_stack(f"cell_{display_count}_{idx}", gap=0)
+                if idx >= n:
+                    # Transparent placeholder keeps this column's width equal
+                    # to filled columns — empty v_stack collapses without it.
+                    cell.view(
+                        f"ph_{display_count}_{idx}",
+                        types.ImageView(width="100%", height=height, alt=""),
+                        default=_BLANK,
+                    )
+                    continue
+                name, url, mt = displayed[idx]
                 if mt == "video":
                     cell.media_player(
                         f"player_{display_count}_{idx}", url=url, height=height
                     )
                 else:
-                    # img() reads src from state — nested path fails.
-                    # view() + default=url mirrors how media_player embeds
-                    # the URL in property.default, bypassing state lookup.
                     cell.view(
                         f"img_{display_count}_{idx}",
                         types.ImageView(width="100%", height=height, alt=name),
@@ -210,7 +221,8 @@ class ImageGridPanel(foo.Panel):
                     )
                 cell.md(f"**{name}**", name=f"lbl_{display_count}_{idx}")
 
-        return types.Property(panel, view=types.VStackView(gap=2))
+        # gap=4 gives enough breathing room between rows to prevent overlap.
+        return types.Property(panel, view=types.VStackView(gap=4))
 
 
 def register(p):
