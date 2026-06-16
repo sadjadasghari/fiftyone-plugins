@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.12.0
+Image Grid Modal Panel v1.13.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -184,44 +184,60 @@ class ImageGridPanel(foo.Panel):
         height_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
         height = height_map.get(cols, "90px")
 
-        # Build rows of h_stacks. Each cell is a v_stack with flex:1 1 0 so all
-        # cells in a row share equal width — including the last (partial) row.
-        # overflow:hidden clips images to the cell boundary so they don't bleed
-        # into adjacent rows. componentsProps injects CSS into the MUI Stack.
-        cell_style = {"flex": "1 1 0", "minWidth": 0, "overflow": "hidden"}
+        # cell_style uses flex:1 1 0 WITHOUT overflow:hidden. Adding
+        # overflow:hidden to flex items changes MUI's min-size calculation and
+        # causes filler cells to not take up their share of the row width,
+        # making content cells in the last row appear larger. Clipping is done
+        # at the img_row level instead.
+        cell_style = {"flex": "1 1 0", "minWidth": 0}
+
+        # Each row group is a v_stack(gap=0) containing:
+        #   img_row: fixed height + overflow:hidden — clips tall images at the
+        #            row boundary so they don't bleed into adjacent rows.
+        #   lbl_row: auto height — labels always visible, never clipped.
+        # VStackView(gap=2) adds spacing between groups.
+        img_row_style = {"height": height, "overflow": "hidden"}
 
         n_rows = (n + cols - 1) // cols
         for row_idx in range(n_rows):
-            row = panel.h_stack(
-                f"row_{display_count}_{row_idx}",
+            group = panel.v_stack(f"group_{display_count}_{row_idx}", gap=0)
+            img_row = group.h_stack(
+                f"img_row_{display_count}_{row_idx}",
                 gap=1,
+                componentsProps={"style": img_row_style},
             )
+            lbl_row = group.h_stack(f"lbl_row_{display_count}_{row_idx}", gap=1)
+
             for col_idx in range(cols):
                 item_idx = row_idx * cols + col_idx
-                cell = row.v_stack(
-                    f"cell_{display_count}_{item_idx}",
+                img_cell = img_row.v_stack(
+                    f"img_cell_{display_count}_{item_idx}",
+                    gap=0,
+                    componentsProps={"style": cell_style},
+                )
+                lbl_cell = lbl_row.v_stack(
+                    f"lbl_cell_{display_count}_{item_idx}",
                     gap=0,
                     componentsProps={"style": cell_style},
                 )
                 if item_idx >= n:
-                    # A non-empty filler cell is required so MUI renders the
-                    # flex item and it occupies its share of the row width.
-                    # Without content, the Stack is pruned from the DOM and the
-                    # real cells in the last row become wider than intended.
-                    cell.md("&nbsp;", name=f"spacer_{display_count}_{item_idx}")
+                    # Non-empty spacers keep filler cells in the DOM so they
+                    # take up their flex share and all columns stay equal width.
+                    img_cell.md("&nbsp;", name=f"img_sp_{display_count}_{item_idx}")
+                    lbl_cell.md("&nbsp;", name=f"lbl_sp_{display_count}_{item_idx}")
                     continue
                 name, url, mt = displayed[item_idx]
                 if mt == "video":
-                    cell.media_player(
+                    img_cell.media_player(
                         f"player_{display_count}_{item_idx}", url=url, height=height
                     )
                 else:
-                    cell.view(
+                    img_cell.view(
                         f"img_{display_count}_{item_idx}",
                         types.ImageView(width="100%", height=height, alt=name),
                         default=url,
                     )
-                cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
+                lbl_cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
 
         return types.Property(panel, view=types.VStackView(gap=2))
 
