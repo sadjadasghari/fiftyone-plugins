@@ -12,7 +12,6 @@ Works only with grouped datasets.
 |
 """
 
-import math
 import urllib.parse
 
 import fiftyone.operators as foo
@@ -182,47 +181,32 @@ class ImageGridPanel(foo.Panel):
         )
 
         cols = _n_cols(n)
-        rows = math.ceil(n / cols)
-        # Reduced heights prevent row content from overflowing into adjacent rows.
         height_map = {1: "300px", 2: "180px", 3: "150px", 4: "120px", 6: "90px"}
         height = height_map.get(cols, "100px")
 
-        # 1×1 transparent GIF — gives empty last-row cells the same dimensions
-        # as filled cells so flex distributes all columns equally.
-        _BLANK = (
-            "data:image/gif;base64,"
-            "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-        )
+        # GridView + space= uses MUI's 12-column system: each cell is always
+        # exactly (space/12) of the parent width regardless of how many cells
+        # share a row. This gives equal widths on all rows including the last,
+        # and eliminates the flexbox expansion and overlap bugs.
+        space = 12 // cols
+        grid = panel.grid(f"grid_{display_count}", gap=2, orientation="2d")
 
-        for row_idx in range(rows):
-            row = panel.h_stack(f"row_{display_count}_{row_idx}", gap=1)
-            for col_idx in range(cols):
-                idx = row_idx * cols + col_idx
-                cell = row.v_stack(f"cell_{display_count}_{idx}", gap=0)
-                if idx >= n:
-                    # Transparent placeholder keeps this column's width equal
-                    # to filled columns — empty v_stack collapses without it.
-                    cell.view(
-                        f"ph_{display_count}_{idx}",
-                        types.ImageView(width="100%", height=height, alt=""),
-                        default=_BLANK,
-                    )
-                    continue
-                name, url, mt = displayed[idx]
-                if mt == "video":
-                    cell.media_player(
-                        f"player_{display_count}_{idx}", url=url, height=height
-                    )
-                else:
-                    cell.view(
-                        f"img_{display_count}_{idx}",
-                        types.ImageView(width="100%", height=height, alt=name),
-                        default=url,
-                    )
-                cell.md(f"**{name}**", name=f"lbl_{display_count}_{idx}")
+        for idx in range(n):
+            name, url, mt = displayed[idx]
+            cell = grid.v_stack(f"cell_{display_count}_{idx}", gap=0, space=space)
+            if mt == "video":
+                cell.media_player(
+                    f"player_{display_count}_{idx}", url=url, height=height
+                )
+            else:
+                cell.view(
+                    f"img_{display_count}_{idx}",
+                    types.ImageView(width="100%", height=height, alt=name),
+                    default=url,
+                )
+            cell.md(f"**{name}**", name=f"lbl_{display_count}_{idx}")
 
-        # gap=4 gives enough breathing room between rows to prevent overlap.
-        return types.Property(panel, view=types.VStackView(gap=4))
+        return types.Property(panel, view=types.VStackView(gap=2))
 
 
 def register(p):
