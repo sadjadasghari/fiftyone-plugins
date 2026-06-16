@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.13.0
+Image Grid Modal Panel v1.15.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -181,63 +181,61 @@ class ImageGridPanel(foo.Panel):
         )
 
         cols = _n_cols(n)
-        height_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
-        height = height_map.get(cols, "90px")
+        # Cell height budget: image portion + ~24 px for the label on top.
+        img_h_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
+        img_height = img_h_map.get(cols, "90px")
+        cell_height = f"{int(img_height[:-2]) + 24}px"
 
-        # cell_style uses flex:1 1 0 WITHOUT overflow:hidden. Adding
-        # overflow:hidden to flex items changes MUI's min-size calculation and
-        # causes filler cells to not take up their share of the row width,
-        # making content cells in the last row appear larger. Clipping is done
-        # at the img_row level instead.
-        cell_style = {"flex": "1 1 0", "minWidth": 0}
+        width_pct = f"{100.0 / cols:.4f}%"
 
-        # Each row group is a v_stack(gap=0) containing:
-        #   img_row: fixed height + overflow:hidden — clips tall images at the
-        #            row boundary so they don't bleed into adjacent rows.
-        #   lbl_row: auto height — labels always visible, never clipped.
-        # VStackView(gap=2) adds spacing between groups.
-        img_row_style = {"height": height, "overflow": "hidden"}
+        # Each cell has an explicit fixed size (width% × cell_height px) with
+        # overflow:hidden. This guarantees:
+        #   - Equal widths: explicit % cannot be overridden by content or BFC.
+        #   - No bleed: overflow:hidden clips the image at the cell boundary.
+        # The row h_stack also carries height+overflow as a second constraint
+        # in case the frontend treats the cell height as min-height.
+        # Labels are placed first (top of cell) so they're always within the
+        # visible area, with the image rendering below them.
+        cell_style = {
+            "width": width_pct,
+            "minWidth": width_pct,
+            "height": cell_height,
+            "overflow": "hidden",
+            "flexShrink": 0,
+            "flexGrow": 0,
+        }
+        row_style = {"height": cell_height, "overflow": "hidden"}
 
         n_rows = (n + cols - 1) // cols
         for row_idx in range(n_rows):
-            group = panel.v_stack(f"group_{display_count}_{row_idx}", gap=0)
-            img_row = group.h_stack(
-                f"img_row_{display_count}_{row_idx}",
-                gap=1,
-                componentsProps={"style": img_row_style},
+            row = panel.h_stack(
+                f"row_{display_count}_{row_idx}",
+                gap=0,
+                componentsProps={"style": row_style},
             )
-            lbl_row = group.h_stack(f"lbl_row_{display_count}_{row_idx}", gap=1)
-
             for col_idx in range(cols):
                 item_idx = row_idx * cols + col_idx
-                img_cell = img_row.v_stack(
-                    f"img_cell_{display_count}_{item_idx}",
-                    gap=0,
-                    componentsProps={"style": cell_style},
-                )
-                lbl_cell = lbl_row.v_stack(
-                    f"lbl_cell_{display_count}_{item_idx}",
+                cell = row.v_stack(
+                    f"cell_{display_count}_{item_idx}",
                     gap=0,
                     componentsProps={"style": cell_style},
                 )
                 if item_idx >= n:
-                    # Non-empty spacers keep filler cells in the DOM so they
-                    # take up their flex share and all columns stay equal width.
-                    img_cell.md("&nbsp;", name=f"img_sp_{display_count}_{item_idx}")
-                    lbl_cell.md("&nbsp;", name=f"lbl_sp_{display_count}_{item_idx}")
+                    cell.md("&nbsp;", name=f"sp_{display_count}_{item_idx}")
                     continue
                 name, url, mt = displayed[item_idx]
+                # Label first so it sits at the top of the clipped cell area.
+                cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
                 if mt == "video":
-                    img_cell.media_player(
-                        f"player_{display_count}_{item_idx}", url=url, height=height
+                    cell.media_player(
+                        f"player_{display_count}_{item_idx}", url=url, height=img_height
                     )
                 else:
-                    img_cell.view(
+                    cell.view(
                         f"img_{display_count}_{item_idx}",
-                        types.ImageView(width="100%", height=height, alt=name),
+                        types.ImageView(width="100%", height=img_height, alt=name),
                         default=url,
                     )
-                lbl_cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
 
         return types.Property(panel, view=types.VStackView(gap=2))
 
