@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.4.0
+Image Grid Modal Panel v1.11.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -181,30 +181,46 @@ class ImageGridPanel(foo.Panel):
         )
 
         cols = _n_cols(n)
-        height_map = {1: "300px", 2: "180px", 3: "150px", 4: "120px", 6: "90px"}
-        height = height_map.get(cols, "100px")
+        height_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
+        height = height_map.get(cols, "90px")
 
-        # GridView + space= uses MUI's 12-column system: each cell is always
-        # exactly (space/12) of the parent width regardless of how many cells
-        # share a row. This gives equal widths on all rows including the last,
-        # and eliminates the flexbox expansion and overlap bugs.
-        space = 12 // cols
-        grid = panel.grid(f"grid_{display_count}", gap=2, orientation="2d")
+        # Build rows of h_stacks. Each cell is a v_stack with flex:1 1 0 so all
+        # cells in a row share equal width — including the last (partial) row.
+        # componentsProps injects CSS directly into the MUI Stack component.
+        cell_style = {"flex": "1 1 0", "minWidth": 0}
 
-        for idx in range(n):
-            name, url, mt = displayed[idx]
-            cell = grid.v_stack(f"cell_{display_count}_{idx}", gap=0, space=space)
-            if mt == "video":
-                cell.media_player(
-                    f"player_{display_count}_{idx}", url=url, height=height
+        n_rows = (n + cols - 1) // cols
+        for row_idx in range(n_rows):
+            row = panel.h_stack(
+                f"row_{display_count}_{row_idx}",
+                gap=1,
+            )
+            for col_idx in range(cols):
+                item_idx = row_idx * cols + col_idx
+                cell = row.v_stack(
+                    f"cell_{display_count}_{item_idx}",
+                    gap=0,
+                    componentsProps={"style": cell_style},
                 )
-            else:
-                cell.view(
-                    f"img_{display_count}_{idx}",
-                    types.ImageView(width="100%", height=height, alt=name),
-                    default=url,
-                )
-            cell.md(f"**{name}**", name=f"lbl_{display_count}_{idx}")
+                if item_idx >= n:
+                    # A non-empty filler cell is required so MUI renders the
+                    # flex item and it occupies its share of the row width.
+                    # Without content, the Stack is pruned from the DOM and the
+                    # real cells in the last row become wider than intended.
+                    cell.md("&nbsp;", name=f"spacer_{display_count}_{item_idx}")
+                    continue
+                name, url, mt = displayed[item_idx]
+                if mt == "video":
+                    cell.media_player(
+                        f"player_{display_count}_{item_idx}", url=url, height=height
+                    )
+                else:
+                    cell.view(
+                        f"img_{display_count}_{item_idx}",
+                        types.ImageView(width="100%", height=height, alt=name),
+                        default=url,
+                    )
+                cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
 
         return types.Property(panel, view=types.VStackView(gap=2))
 
