@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.11.0
+Image Grid Modal Panel v1.12.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -186,8 +186,9 @@ class ImageGridPanel(foo.Panel):
 
         # Build rows of h_stacks. Each cell is a v_stack with flex:1 1 0 so all
         # cells in a row share equal width — including the last (partial) row.
-        # componentsProps injects CSS directly into the MUI Stack component.
-        cell_style = {"flex": "1 1 0", "minWidth": 0}
+        # overflow:hidden clips images to the cell boundary so they don't bleed
+        # into adjacent rows. componentsProps injects CSS into the MUI Stack.
+        cell_style = {"flex": "1 1 0", "minWidth": 0, "overflow": "hidden"}
 
         n_rows = (n + cols - 1) // cols
         for row_idx in range(n_rows):
