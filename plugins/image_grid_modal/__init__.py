@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.16.0
+Image Grid Modal Panel v1.17.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -181,31 +181,38 @@ class ImageGridPanel(foo.Panel):
         )
 
         cols = _n_cols(n)
-        height_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
-        height = height_map.get(cols, "90px")
 
-        # MUI GridView with xs column spans. Each cell is always exactly
-        # (space/12) of the container width regardless of content — no filler
-        # cells needed, no CSS flex tricks required. Rows wrap automatically
-        # and MUI manages row heights without overlap.
-        # NOTE: do NOT pass orientation="2d" — that caused 1-per-row rendering.
-        space = 12 // cols
-        grid = panel.grid(f"grid_{display_count}", gap=2)
+        # getGridSx in the FiftyOne frontend generates CSS Grid layout only
+        # when orientation="vertical" and columns=N is supplied, producing:
+        #   display: grid; grid-template-columns: repeat(N, 1fr)
+        # Each grid item gets width:"100%" = 1/N of the container.
+        # The `space` parameter only controls maxHeight (useless for columns).
+        # No filler cells needed — CSS Grid handles partial last rows natively.
+        #
+        # ImageView height is passed as an HTML <img height=N> attribute, which
+        # only accepts integers (no "px"). Omitting height lets each image
+        # render at natural aspect ratio; since all cells are equal width
+        # (1fr), all images in the grid render at the same natural height with
+        # no overflow and no row overlap.
+        grid = panel.grid(
+            f"grid_{display_count}",
+            gap=2,
+            orientation="vertical",
+            columns=cols,
+        )
 
         for item_idx in range(n):
             name, url, mt = displayed[item_idx]
-            cell = grid.v_stack(
-                f"cell_{display_count}_{item_idx}", gap=0, space=space
-            )
+            cell = grid.v_stack(f"cell_{display_count}_{item_idx}", gap=0)
             cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
             if mt == "video":
                 cell.media_player(
-                    f"player_{display_count}_{item_idx}", url=url, height=height
+                    f"player_{display_count}_{item_idx}", url=url
                 )
             else:
                 cell.view(
                     f"img_{display_count}_{item_idx}",
-                    types.ImageView(width="100%", height=height, alt=name),
+                    types.ImageView(width="100%", alt=name),
                     default=url,
                 )
 
