@@ -1,5 +1,5 @@
 """
-Image Grid Modal Panel v1.15.0
+Image Grid Modal Panel v1.16.0
 
 Shows slices of the current group as a media grid (1–24 slices, variable
 per group). Handles both image and video slices. A dropdown controls how
@@ -181,61 +181,33 @@ class ImageGridPanel(foo.Panel):
         )
 
         cols = _n_cols(n)
-        # Cell height budget: image portion + ~24 px for the label on top.
-        img_h_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
-        img_height = img_h_map.get(cols, "90px")
-        cell_height = f"{int(img_height[:-2]) + 24}px"
+        height_map = {1: "280px", 2: "160px", 3: "130px", 4: "110px", 6: "85px"}
+        height = height_map.get(cols, "90px")
 
-        width_pct = f"{100.0 / cols:.4f}%"
+        # MUI GridView with xs column spans. Each cell is always exactly
+        # (space/12) of the container width regardless of content — no filler
+        # cells needed, no CSS flex tricks required. Rows wrap automatically
+        # and MUI manages row heights without overlap.
+        # NOTE: do NOT pass orientation="2d" — that caused 1-per-row rendering.
+        space = 12 // cols
+        grid = panel.grid(f"grid_{display_count}", gap=2)
 
-        # Each cell has an explicit fixed size (width% × cell_height px) with
-        # overflow:hidden. This guarantees:
-        #   - Equal widths: explicit % cannot be overridden by content or BFC.
-        #   - No bleed: overflow:hidden clips the image at the cell boundary.
-        # The row h_stack also carries height+overflow as a second constraint
-        # in case the frontend treats the cell height as min-height.
-        # Labels are placed first (top of cell) so they're always within the
-        # visible area, with the image rendering below them.
-        cell_style = {
-            "width": width_pct,
-            "minWidth": width_pct,
-            "height": cell_height,
-            "overflow": "hidden",
-            "flexShrink": 0,
-            "flexGrow": 0,
-        }
-        row_style = {"height": cell_height, "overflow": "hidden"}
-
-        n_rows = (n + cols - 1) // cols
-        for row_idx in range(n_rows):
-            row = panel.h_stack(
-                f"row_{display_count}_{row_idx}",
-                gap=0,
-                componentsProps={"style": row_style},
+        for item_idx in range(n):
+            name, url, mt = displayed[item_idx]
+            cell = grid.v_stack(
+                f"cell_{display_count}_{item_idx}", gap=0, space=space
             )
-            for col_idx in range(cols):
-                item_idx = row_idx * cols + col_idx
-                cell = row.v_stack(
-                    f"cell_{display_count}_{item_idx}",
-                    gap=0,
-                    componentsProps={"style": cell_style},
+            cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
+            if mt == "video":
+                cell.media_player(
+                    f"player_{display_count}_{item_idx}", url=url, height=height
                 )
-                if item_idx >= n:
-                    cell.md("&nbsp;", name=f"sp_{display_count}_{item_idx}")
-                    continue
-                name, url, mt = displayed[item_idx]
-                # Label first so it sits at the top of the clipped cell area.
-                cell.md(f"**{name}**", name=f"lbl_{display_count}_{item_idx}")
-                if mt == "video":
-                    cell.media_player(
-                        f"player_{display_count}_{item_idx}", url=url, height=img_height
-                    )
-                else:
-                    cell.view(
-                        f"img_{display_count}_{item_idx}",
-                        types.ImageView(width="100%", height=img_height, alt=name),
-                        default=url,
-                    )
+            else:
+                cell.view(
+                    f"img_{display_count}_{item_idx}",
+                    types.ImageView(width="100%", height=height, alt=name),
+                    default=url,
+                )
 
         return types.Property(panel, view=types.VStackView(gap=2))
 
